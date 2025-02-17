@@ -52,9 +52,8 @@
     <button onclick="toggleSettings()">Settings</button>
 
     <div class="settings" id="settingsPanel">
-        <label>Nabu Casa URL: <input type="text" id="haUrl" placeholder="https://your-instance.ui.nabu.casa"></label>
-        <label>Webhook URL: <input type="text" id="webhookUrl" placeholder="https://your-instance.ui.nabu.casa/api/webhook/your_webhook_id"></label>
-        <label>Home Assistant Token: <input type="password" id="haToken"></label>
+        <label>Bearer Token: <input type="password" id="ha_token" placeholder="Your Bearer Token"></label>
+        <label>Webhook URL (Send Data): <input type="text" id="webhookSendUrl" placeholder="https://your-instance.ui.nabu.casa/api/webhook/kraken_update"></label>
         <button onclick="saveSettings()">Save Settings</button>
     </div>
 
@@ -65,18 +64,16 @@
         }
 
         function saveSettings() {
-            const haUrl = document.getElementById("haUrl").value.trim();
-            const webhookUrl = document.getElementById("webhookUrl").value.trim();
-            const haToken = document.getElementById("haToken").value.trim();
+            const token = document.getElementById("ha_token").value.trim();
+            const webhookSendUrl = document.getElementById("webhookSendUrl").value.trim();
 
-            if (!haUrl || !webhookUrl || !haToken) {
+            if (!token || !webhookSendUrl) {
                 alert("Please fill in all fields!");
                 return;
             }
 
-            localStorage.setItem("haUrl", haUrl);
-            localStorage.setItem("webhookUrl", webhookUrl);
-            localStorage.setItem("haToken", haToken);
+            localStorage.setItem("token", token);
+            localStorage.setItem("webhookSendUrl", webhookSendUrl);
 
             alert("Settings saved!");
             toggleSettings();
@@ -84,39 +81,28 @@
         }
 
         function loadSettings() {
-            document.getElementById("haUrl").value = localStorage.getItem("haUrl") || "";
-            document.getElementById("webhookUrl").value = localStorage.getItem("webhookUrl") || "";
-            document.getElementById("haToken").value = localStorage.getItem("haToken") || "";
+            document.getElementById("token").value = localStorage.getItem("token") || "";
+            document.getElementById("webhookSendUrl").value = localStorage.getItem("webhookSendUrl") || "";
         }
 
         async function triggerWebhook() {
-            const webhookUrl = localStorage.getItem("webhookUrl");
-            if (!webhookUrl) {
-                console.error("Webhook URL not set!");
+            const webhookSendUrl = localStorage.getItem("webhookSendUrl");
+            const token = localStorage.getItem("token");
+            
+            if (!webhookSendUrl || !token) {
+                console.error("Webhook Send URL or token not set!");
                 return;
             }
-
-            await fetch(webhookUrl, { method: "POST" }); // Trigger HA to update data
-        }
-
-        async function fetchDisplayData() {
-            const haUrl = localStorage.getItem("haUrl");
-            const haToken = localStorage.getItem("haToken");
-
-            if (!haUrl || !haToken) {
-                document.getElementById("temperatureDisplay").innerText = "Missing Settings!";
-                return;
-            }
-
+    
             try {
-                const response = await fetch(`${haUrl}/api/states/input_text.kraken_display`, {
-                    headers: { "Authorization": `Bearer ${haToken}`, "Content-Type": "application/json" }
+                const response = await fetch(webhookSendUrl, {
+                    headers: { "Authorization": `Bearer ${token}`, "Content-Type": "application/json" }
                 });
 
                 if (!response.ok) throw new Error("Invalid response");
 
                 const data = await response.json();
-                document.getElementById("temperatureDisplay").innerText = data.state; // Update UI
+                document.getElementById("temperatureDisplay").innerText = `${data.fetched}°C`; // Update UI
             } catch (error) {
                 console.error("Error fetching Home Assistant data:", error);
                 document.getElementById("temperatureDisplay").innerText = "Error!";
@@ -126,10 +112,9 @@
         // Load saved settings on page load
         loadSettings();
 
-        // Trigger webhook, then fetch data after 2 sec
-        triggerWebhook();
-        setTimeout(fetchDisplayData, 2000);
-        setInterval(fetchDisplayData, 10000); // Refresh every 10s
+        // Trigger webhook
+        setTimeout(triggerWebhook, 2000);
+        setInterval(triggerWebhook, 10000); // Refresh every 10s
     </script>
 </body>
 </html>
