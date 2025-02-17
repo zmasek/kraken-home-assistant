@@ -1,0 +1,123 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=640, height=640, initial-scale=1.0">
+    <title>Kraken Home Assistant Display</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; font-family: Arial, sans-serif; }
+        body {
+            width: 640px;
+            height: 640px;
+            background: black;
+            color: white;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            flex-direction: column;
+            text-align: center;
+            overflow: hidden;
+            border-radius: 50%;
+        }
+        .circle-container {
+            width: 600px;
+            height: 600px;
+            position: relative;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            flex-direction: column;
+        }
+        .info {
+            font-size: 24px;
+            font-weight: bold;
+        }
+        .settings {
+            display: none;
+            flex-direction: column;
+            align-items: center;
+        }
+        input, button {
+            margin: 10px;
+            padding: 5px;
+            font-size: 16px;
+        }
+    </style>
+</head>
+<body>
+    <div class="circle-container" id="display">
+        <div class="info">Fetching data...</div>
+    </div>
+
+    <div class="settings" id="settings">
+        <h2>Settings</h2>
+        <label>Home Assistant URL: <input type="text" id="ha_url" placeholder="http://homeassistant.local:8123"></label>
+        <label>Bearer Token: <input type="password" id="ha_token" placeholder="Your Bearer Token"></label>
+        <button onclick="saveSettings()">Save</button>
+    </div>
+
+    <script>
+        // Detect Kraken Mode
+        const params = new URLSearchParams(window.location.search);
+        const isKraken = params.get("kraken") === "1";
+
+        // Select elements
+        const display = document.getElementById("display");
+        const settings = document.getElementById("settings");
+
+        // Load stored settings
+        const haUrl = localStorage.getItem("ha_url") || "";
+        const haToken = localStorage.getItem("ha_token") || "";
+
+        // Function to save settings
+        function saveSettings() {
+            const url = document.getElementById("ha_url").value;
+            const token = document.getElementById("ha_token").value;
+            localStorage.setItem("ha_url", url);
+            localStorage.setItem("ha_token", token);
+            alert("Settings saved!");
+            location.reload(); // Reload to apply changes
+        }
+
+        // Fetch Home Assistant Data
+        async function fetchHomeAssistantData() {
+            if (!haUrl || !haToken) {
+                display.innerHTML = "<div class='info'>Go to settings to configure Home Assistant</div>";
+                settings.style.display = "flex"; // Show settings form
+                return;
+            }
+
+            try {
+                const response = await fetch(`${haUrl}/api/states`, {
+                    headers: { "Authorization": `Bearer ${haToken}`, "Content-Type": "application/json" }
+                });
+
+                if (!response.ok) throw new Error("Invalid response from Home Assistant");
+
+                const data = await response.json();
+                console.log("Home Assistant Data:", data);
+
+                // Example: Find temperature sensor (modify as needed)
+                const tempSensor = data.find(entity => entity.entity_id.includes("sensor.temperature"));
+                const temperature = tempSensor ? `${tempSensor.state}°C` : "No Temp Data";
+
+                // Update display
+                display.innerHTML = `<div class='info'>Temp: ${temperature}</div>`;
+            } catch (error) {
+                console.error("Error fetching Home Assistant data:", error);
+                display.innerHTML = "<div class='info'>Error fetching data!</div>";
+            }
+        }
+
+        // If Kraken mode is enabled, show display
+        if (isKraken) {
+            fetchHomeAssistantData();
+            setInterval(fetchHomeAssistantData, 10000); // Refresh every 10 seconds
+        } else {
+            // If not on Kraken, show settings page
+            settings.style.display = "flex";
+        }
+    </script>
+</body>
+</html>
