@@ -3,121 +3,133 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=640, height=640, initial-scale=1.0">
-    <title>Kraken Home Assistant Display</title>
+    <title>Kraken Display</title>
     <style>
-        * { margin: 0; padding: 0; box-sizing: border-box; font-family: Arial, sans-serif; }
         body {
+            display: flex;
+            justify-content: center;
+            align-items: center;
             width: 640px;
             height: 640px;
-            background: black;
+            margin: 0;
+            background-color: black;
             color: white;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            flex-direction: column;
+            font-family: Arial, sans-serif;
             text-align: center;
-            overflow: hidden;
-            border-radius: 50%;
-        }
-        .circle-container {
-            width: 600px;
-            height: 600px;
-            position: relative;
-            border-radius: 50%;
-            display: flex;
-            align-items: center;
-            justify-content: center;
             flex-direction: column;
         }
-        .info {
-            font-size: 24px;
-            font-weight: bold;
+
+        .circle {
+            width: 80%;
+            height: 80%;
+            border-radius: 50%;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            border: 5px solid white;
+            font-size: 3rem;
+            margin-bottom: 20px;
         }
+
         .settings {
             display: none;
             flex-direction: column;
-            align-items: center;
+            gap: 10px;
+            background: rgba(255, 255, 255, 0.1);
+            padding: 15px;
+            border-radius: 10px;
         }
+
         input, button {
-            margin: 10px;
+            font-size: 1rem;
             padding: 5px;
-            font-size: 16px;
         }
     </style>
 </head>
 <body>
-    <div class="circle-container" id="display">
-        <div class="info">Fetching data...</div>
-    </div>
+    <div class="circle" id="temperatureDisplay">Loading...</div>
 
-    <div class="settings" id="settings">
-        <h2>Settings</h2>
-        <label>Home Assistant URL: <input type="text" id="ha_url" placeholder="http://homeassistant.local:8123"></label>
-        <label>Bearer Token: <input type="password" id="ha_token" placeholder="Your Bearer Token"></label>
-        <button onclick="saveSettings()">Save</button>
+    <button onclick="toggleSettings()">Settings</button>
+
+    <div class="settings" id="settingsPanel">
+        <label>Nabu Casa URL: <input type="text" id="haUrl" placeholder="https://your-instance.ui.nabu.casa"></label>
+        <label>Webhook URL: <input type="text" id="webhookUrl" placeholder="https://your-instance.ui.nabu.casa/api/webhook/your_webhook_id"></label>
+        <label>Home Assistant Token: <input type="password" id="haToken"></label>
+        <button onclick="saveSettings()">Save Settings</button>
     </div>
 
     <script>
-        // Detect Kraken Mode
-        const params = new URLSearchParams(window.location.search);
-        const isKraken = params.get("kraken") === "1";
-
-        // Select elements
-        const display = document.getElementById("display");
-        const settings = document.getElementById("settings");
-
-        // Load stored settings
-        const haUrl = localStorage.getItem("ha_url") || "";
-        const haToken = localStorage.getItem("ha_token") || "";
-
-        // Function to save settings
-        function saveSettings() {
-            const url = document.getElementById("ha_url").value;
-            const token = document.getElementById("ha_token").value;
-            localStorage.setItem("ha_url", url);
-            localStorage.setItem("ha_token", token);
-            alert("Settings saved!");
-            location.reload(); // Reload to apply changes
+        function toggleSettings() {
+            const panel = document.getElementById("settingsPanel");
+            panel.style.display = panel.style.display === "none" ? "flex" : "none";
         }
 
-        // Fetch Home Assistant Data
-        async function fetchHomeAssistantData() {
+        function saveSettings() {
+            const haUrl = document.getElementById("haUrl").value.trim();
+            const webhookUrl = document.getElementById("webhookUrl").value.trim();
+            const haToken = document.getElementById("haToken").value.trim();
+
+            if (!haUrl || !webhookUrl || !haToken) {
+                alert("Please fill in all fields!");
+                return;
+            }
+
+            localStorage.setItem("haUrl", haUrl);
+            localStorage.setItem("webhookUrl", webhookUrl);
+            localStorage.setItem("haToken", haToken);
+
+            alert("Settings saved!");
+            toggleSettings();
+            fetchDisplayData(); // Refresh data after saving
+        }
+
+        function loadSettings() {
+            document.getElementById("haUrl").value = localStorage.getItem("haUrl") || "";
+            document.getElementById("webhookUrl").value = localStorage.getItem("webhookUrl") || "";
+            document.getElementById("haToken").value = localStorage.getItem("haToken") || "";
+        }
+
+        async function triggerWebhook() {
+            const webhookUrl = localStorage.getItem("webhookUrl");
+            if (!webhookUrl) {
+                console.error("Webhook URL not set!");
+                return;
+            }
+
+            await fetch(webhookUrl, { method: "POST" }); // Trigger HA to update data
+        }
+
+        async function fetchDisplayData() {
+            const haUrl = localStorage.getItem("haUrl");
+            const haToken = localStorage.getItem("haToken");
+
             if (!haUrl || !haToken) {
-                display.innerHTML = "<div class='info'>Go to settings to configure Home Assistant</div>";
-                settings.style.display = "flex"; // Show settings form
+                document.getElementById("temperatureDisplay").innerText = "Missing Settings!";
                 return;
             }
 
             try {
-                const response = await fetch(`${haUrl}/api/states`, {
+                const response = await fetch(`${haUrl}/api/states/input_text.kraken_display`, {
                     headers: { "Authorization": `Bearer ${haToken}`, "Content-Type": "application/json" }
                 });
 
-                if (!response.ok) throw new Error("Invalid response from Home Assistant");
+                if (!response.ok) throw new Error("Invalid response");
 
                 const data = await response.json();
-                console.log("Home Assistant Data:", data);
-
-                // Example: Find temperature sensor (modify as needed)
-                const tempSensor = data.find(entity => entity.entity_id.includes("sensor.temperature"));
-                const temperature = tempSensor ? `${tempSensor.state}°C` : "No Temp Data";
-
-                // Update display
-                display.innerHTML = `<div class='info'>Temp: ${temperature}</div>`;
+                document.getElementById("temperatureDisplay").innerText = data.state; // Update UI
             } catch (error) {
                 console.error("Error fetching Home Assistant data:", error);
-                display.innerHTML = "<div class='info'>Error fetching data!</div>";
+                document.getElementById("temperatureDisplay").innerText = "Error!";
             }
         }
 
-        // If Kraken mode is enabled, show display
-        if (isKraken) {
-            fetchHomeAssistantData();
-            setInterval(fetchHomeAssistantData, 10000); // Refresh every 10 seconds
-        } else {
-            // If not on Kraken, show settings page
-            settings.style.display = "flex";
-        }
+        // Load saved settings on page load
+        loadSettings();
+
+        // Trigger webhook, then fetch data after 2 sec
+        triggerWebhook();
+        setTimeout(fetchDisplayData, 2000);
+        setInterval(fetchDisplayData, 10000); // Refresh every 10s
     </script>
 </body>
 </html>
