@@ -52,7 +52,7 @@
     <button onclick="toggleSettings()">Settings</button>
 
     <div class="settings" id="settingsPanel">
-        <label>Bearer Token: <input type="password" id="ha_token" placeholder="Your Bearer Token"></label>
+        <label>Bearer Token: <input type="password" id="token" placeholder="Your Bearer Token"></label>
         <label>Webhook URL (Send Data): <input type="text" id="webhookSendUrl" placeholder="https://your-instance.ui.nabu.casa/api/webhook/kraken_update"></label>
         <button onclick="saveSettings()">Save Settings</button>
     </div>
@@ -64,7 +64,7 @@
         }
 
         function saveSettings() {
-            const token = document.getElementById("ha_token").value.trim();
+            const token = document.getElementById("token").value.trim();
             const webhookSendUrl = document.getElementById("webhookSendUrl").value.trim();
 
             if (!token || !webhookSendUrl) {
