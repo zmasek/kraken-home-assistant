@@ -54,6 +54,7 @@
     <div class="settings" id="settingsPanel">
         <label>Bearer Token: <input type="password" id="token" placeholder="Your Bearer Token"></label>
         <label>Webhook URL (Send Data): <input type="text" id="webhookSendUrl" placeholder="https://your-instance.ui.nabu.casa/api/webhook/kraken_update"></label>
+        <label>Fetch (Get Data): <input type="text" id="getUrl" placeholder="https://your-instance.ui.nabu.casa/api/states/input_text.kraken_display"></label>
         <button onclick="saveSettings()">Save Settings</button>
     </div>
 
@@ -66,14 +67,16 @@
         function saveSettings() {
             const token = document.getElementById("token").value.trim();
             const webhookSendUrl = document.getElementById("webhookSendUrl").value.trim();
+            const getUrl = document.getElementById("getUrl").value.trim();
 
-            if (!token || !webhookSendUrl) {
+            if (!token || !webhookSendUrl || !getUrl) {
                 alert("Please fill in all fields!");
                 return;
             }
 
             localStorage.setItem("token", token);
             localStorage.setItem("webhookSendUrl", webhookSendUrl);
+            localStorage.setItem("getUrl", getUrl);
 
             alert("Settings saved!");
             toggleSettings();
@@ -83,6 +86,7 @@
         function loadSettings() {
             document.getElementById("token").value = localStorage.getItem("token") || "";
             document.getElementById("webhookSendUrl").value = localStorage.getItem("webhookSendUrl") || "";
+            document.getElementById("getUrl").value = localStorage.getItem("getUrl") || "";
         }
 
         async function triggerWebhook() {
@@ -101,21 +105,42 @@
                 });
 
                 if (!response.ok) throw new Error("Invalid response");
-
-                const data = await response.json();
-                document.getElementById("temperatureDisplay").innerText = `${data.fetched}°C`; // Update UI
             } catch (error) {
                 console.error("Error fetching Home Assistant data:", error);
                 document.getElementById("temperatureDisplay").innerText = "Error!";
             }
         }
 
+        async function fetchDisplayData() {
+            const token = localStorage.getItem("token");
+            const getUrl = localStorage.getItem("getUrl");
+            if (!getUrl || !token) {
+                console.error("Get URL or token not set!");
+                return;
+            }
+            try {
+                const response = await fetch(getUrl, {
+                    headers: { "Authorization": `Bearer ${token}`, "Content-Type": "application/json" },
+                });
+
+                if (!response.ok) throw new Error("Invalid response");
+                const data = await response.json();
+                document.getElementById("temperatureDisplay").innerText = `${data.fetched}°C`; // Update UI
+            } catch (error) {
+                console.error("Error fetching Home Assistant data:", error);
+                document.getElementById("temperatureDisplay").innerText = "Error!";
+            }
+            
+        }
+        
         // Load saved settings on page load
         loadSettings();
 
         // Trigger webhook
         setTimeout(triggerWebhook, 2000);
         setInterval(triggerWebhook, 10000); // Refresh every 10s
+        setTimeout(fetchDisplayData, 2000);
+        setInterval(fetchDisplayData, 10000); // Refresh every 10s
     </script>
 </body>
 </html>
