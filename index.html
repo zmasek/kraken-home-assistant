@@ -63,6 +63,11 @@
         if (isKraken) {
             document.getElementById("settingsButton").style.display = "none";
         }
+
+        let ws = null;
+        let reconnectTimeout = null;
+        let messageId = 1;
+
         function toggleSettings() {
             const panel = document.getElementById("settingsPanel");
             panel.style.display = panel.style.display === "none" ? "flex" : "none";
@@ -82,7 +87,8 @@
 
             alert("Settings saved!");
             toggleSettings();
-            fetchDisplayData(); // Refresh data after saving
+            setupWebSocket(); // Start WebSocket connection after saving
+            fetchDisplayData(); // Get initial state
         }
 
         function loadSettings() {
@@ -104,20 +110,89 @@
 
                 if (!response.ok) throw new Error("Invalid response");
                 const data = await response.json();
-                document.getElementById("temperatureDisplay").innerText = `${data.attributes.current_temperature} °C`; // Update UI
+                document.getElementById("temperatureDisplay").innerText = `${data.attributes.current_temperature} °C`;
             } catch (error) {
                 console.error("Error fetching Home Assistant data:", error);
                 document.getElementById("temperatureDisplay").innerText = "Error!";
             }
+        }
+
+        function setupWebSocket() {
+            if (ws) {
+                ws.close();
+            }
+
+            if (reconnectTimeout) {
+                clearTimeout(reconnectTimeout);
+            }
+
+            const token = localStorage.getItem("token");
+            const getUrl = localStorage.getItem("getUrl");
             
+            if (!token || !getUrl) {
+                console.error("Settings not configured!");
+                return;
+            }
+
+            // Extract base URL and entity ID
+            const baseUrl = getUrl.split('/api/')[0];
+            const entityId = getUrl.split('states/')[1];
+            const wsUrl = baseUrl.replace(/^http/, 'ws');
+            
+            try {
+                ws = new WebSocket(`${wsUrl}/api/websocket`);
+
+                ws.onopen = () => {
+                    console.log("WebSocket Connected");
+                    // Auth phase 1: Send auth message
+                    ws.send(JSON.stringify({
+                        type: "auth",
+                        access_token: token
+                    }));
+                };
+
+                ws.onmessage = (event) => {
+                    const data = JSON.parse(event.data);
+                    
+                    if (data.type === "auth_ok") {
+                        // Auth phase 2: Subscribe to events
+                        ws.send(JSON.stringify({
+                            id: messageId++,
+                            type: "subscribe_events",
+                            event_type: "state_changed"
+                        }));
+                    }
+                    else if (data.type === "event" && 
+                             data.event.event_type === "state_changed" && 
+                             data.event.data.entity_id === entityId) {
+                        const temp = data.event.data.new_state.attributes.current_temperature;
+                        document.getElementById("temperatureDisplay").innerText = `${temp} °C`;
+                    }
+                };
+
+                ws.onclose = () => {
+                    console.log("WebSocket Closed");
+                    // Attempt to reconnect after 5 seconds
+                    reconnectTimeout = setTimeout(setupWebSocket, 5000);
+                };
+
+                ws.onerror = (error) => {
+                    console.error("WebSocket Error:", error);
+                };
+            } catch (error) {
+                console.error("Error setting up WebSocket:", error);
+                reconnectTimeout = setTimeout(setupWebSocket, 5000);
+            }
         }
         
         // Load saved settings on page load
         loadSettings();
 
-        // Trigger webhook
-        setTimeout(fetchDisplayData, 2000);
-        setInterval(fetchDisplayData, 10000); // Refresh every 10s
+        // Initial setup
+        setTimeout(() => {
+            fetchDisplayData();  // Get initial state
+            setupWebSocket();    // Start WebSocket connection
+        }, 2000);
     </script>
 </body>
 </html>
