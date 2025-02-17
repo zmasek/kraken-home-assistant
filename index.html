@@ -99,7 +99,7 @@
 
                 if (!response.ok) throw new Error("Invalid response");
                 const data = await response.json();
-                document.getElementById("temperatureDisplay").innerText = `${data.fetched}°C`; // Update UI
+                document.getElementById("temperatureDisplay").innerText = `${data.attributes.current_temperature} °C`; // Update UI
             } catch (error) {
                 console.error("Error fetching Home Assistant data:", error);
                 document.getElementById("temperatureDisplay").innerText = "Error!";
