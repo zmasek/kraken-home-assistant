@@ -4,6 +4,9 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=640, height=640, initial-scale=1.0">
     <title>Kraken Display</title>
+    <link href="https://cdn.jsdelivr.net/npm/daisyui@5" rel="stylesheet" type="text/css" />
+    <script src="https://cdn.jsdelivr.net/npm/@tailwindcss/browser@4"></script>
+    <script src="https://cdn.jsdelivr.net/npm/echarts"></script>
     <style>
         body {
             display: flex;
@@ -13,106 +16,309 @@
             height: 640px;
             margin: 0;
             background-color: black;
-            color: white;
             font-family: Arial, sans-serif;
             text-align: center;
             flex-direction: column;
         }
-
-        .circle {
-            width: 80%;
-            height: 80%;
-            border-radius: 50%;
-            display: flex;
-            justify-content: center;
-            align-items: center;
-            border: 5px solid white;
-            font-size: 3rem;
-        }
-
-        .settings {
-            display: none;
-            flex-direction: column;
-            gap: 10px;
-            background: rgba(255, 255, 255, 0.1);
-            padding: 15px;
-            border-radius: 10px;
-        }
-
-        input, button {
-            font-size: 1rem;
-            padding: 5px;
+        .loading-circle {
+            display: block;
+            margin: auto;
         }
     </style>
 </head>
 <body>
-    <div class="circle" id="temperatureDisplay">Loading...</div>
-
-    <button onclick="toggleSettings()" id="settingsButton">Settings</button>
-
-    <div class="settings" id="settingsPanel">
-        <label>Bearer Token: <input type="password" id="token" placeholder="Your Bearer Token"></label>
-        <label>Fetch (Get Data): <input type="text" id="getUrl" placeholder="https://your-instance.ui.nabu.casa/api/states/input_text.kraken_display"></label>
-        <button onclick="saveSettings()">Save Settings</button>
+    <div style="width: 640px; height: 640px; position: relative;">
+        <div id="weatherIcon" style="font-size: 6rem; position: absolute; top: 75%; left: 50%; transform: translate(-50%, -50%); z-index: 10;">
+          ☀️
+        </div>
+        <div id="multiRingGauge" style="width: 100%; height: 100%;"></div>
     </div>
+
+    <fieldset class="settings fieldset w-xs" id="settingsPanel">
+        <legend class="fieldset-legend text-white">Configuration</legend>
+        <label class="fieldset-label text-white">Bearer Token</label>
+        <input type="password" class="input" id="token" placeholder="Your Bearer Token">
+        <label class="fieldset-label text-white">Home Assistant URL</label>
+        <input type="text" class="input" id="HAURL" placeholder="https://your-instance.ui.nabu.casa/">
+        <label class="fieldset-label text-white">Inner Ring State</label>
+        <input type="text" class="input" id="innerRingState" placeholder="climate.office">
+        <label class="fieldset-label text-white">Inner Ring Attribute</label>
+        <input type="text" class="input" id="innerRingAttribute" placeholder="current_temperature">
+        <label class="fieldset-label text-white">Inner Ring Label</label>
+        <input type="text" class="input" id="innerRingLabel" placeholder="Office">
+        <label class="fieldset-label text-white">Outer Ring State</label>
+        <input type="text" class="input" id="outerRingState" placeholder="climate.living_room_2">
+        <label class="fieldset-label text-white">Outer Ring Attribute</label>
+        <input type="text" class="input" id="outerRingAttribute" placeholder="current_temperature">
+        <label class="fieldset-label text-white">Outer Ring Label</label>
+        <input type="text" class="input" id="outerRingLabel" placeholder="Living Room">
+        <label class="fieldset-label text-white">Far Ring State</label>
+        <input type="text" class="input" id="farRingState" placeholder="sensor.outdoor_temperature">
+        <label class="fieldset-label text-white">Far Ring Attribute</label>
+        <input type="text" class="input" id="farRingAttribute" placeholder="">
+        <label class="fieldset-label text-white">Far Ring Label</label>
+        <input type="text" class="input" id="farRingLabel" placeholder="Outdoor">
+        <label class="fieldset-label text-white">Weather Icon State</label>
+        <input type="text" class="input" id="weatherIconState" placeholder="weather.forecast_home">
+        <label class="fieldset-label text-white">Weather Icon Attribute</label>
+        <input type="text" class="input" id="weatherIconAttribute" placeholder="">
+        <button class="btn" onclick="saveSettings()">Save Settings</button>
+    </fieldset >
 
     <script>
         const params = new URLSearchParams(window.location.search);
         const isKraken = params.get("kraken") === "1";
         if (isKraken) {
-            document.getElementById("settingsButton").style.display = "none";
+            document.getElementById("settingsPanel").style.display = "none";
         }
 
         let ws = null;
         let reconnectTimeout = null;
         let messageId = 1;
 
-        function toggleSettings() {
-            const panel = document.getElementById("settingsPanel");
-            panel.style.display = panel.style.display === "none" ? "flex" : "none";
-        }
-
         function saveSettings() {
             const token = document.getElementById("token").value.trim();
-            const getUrl = document.getElementById("getUrl").value.trim();
+            const HAURL = document.getElementById("HAURL").value.trim();
+            const innerRingState = document.getElementById("innerRingState").value.trim();
+            const innerRingAttribute = document.getElementById("innerRingAttribute").value.trim();
+            const innerRingLabel = document.getElementById("innerRingLabel").value.trim();
+            const outerRingState = document.getElementById("outerRingState").value.trim();
+            const outerRingAttribute = document.getElementById("outerRingAttribute").value.trim();
+            const outerRingLabel = document.getElementById("outerRingLabel").value.trim();
+            const farRingState = document.getElementById("farRingState").value.trim();
+            const farRingAttribute = document.getElementById("farRingAttribute").value.trim();
+            const farRingLabel = document.getElementById("farRingLabel").value.trim();
+            const weatherIconState = document.getElementById("weatherIconState").value.trim();
+            const weatherIconAttribute = document.getElementById("weatherIconAttribute").value.trim();
 
-            if (!token || !getUrl) {
-                alert("Please fill in all fields!");
+            if (!token || !HAURL || !innerRingState || !outerRingState || !farRingState || !weatherIconState) {
+                alert("Please fill in all fields if possible (attributes can be empty, but then it takes the default)!");
                 return;
             }
 
             localStorage.setItem("token", token);
-            localStorage.setItem("getUrl", getUrl);
+            localStorage.setItem("HAURL", HAURL);
+            localStorage.setItem("innerRingState", innerRingState);
+            localStorage.setItem("innerRingAttribute", innerRingAttribute);
+            localStorage.setItem("innerRingLabel", innerRingLabel);
+            localStorage.setItem("outerRingState", outerRingState);
+            localStorage.setItem("outerRingAttribute", outerRingAttribute);
+            localStorage.setItem("outerRingLabel", outerRingLabel);
+            localStorage.setItem("farRingState", farRingState);
+            localStorage.setItem("farRingAttribute", farRingAttribute);
+            localStorage.setItem("farRingLabel", farRingLabel);
+            localStorage.setItem("weatherIconState", weatherIconState);
+            localStorage.setItem("weatherIconAttribute", weatherIconAttribute);
 
             alert("Settings saved!");
-            toggleSettings();
             setupWebSocket(); // Start WebSocket connection after saving
             fetchDisplayData(); // Get initial state
         }
 
         function loadSettings() {
             document.getElementById("token").value = localStorage.getItem("token") || "";
-            document.getElementById("getUrl").value = localStorage.getItem("getUrl") || "";
+            document.getElementById("HAURL").value = localStorage.getItem("HAURL") || "";
+            document.getElementById("innerRingState").value = localStorage.getItem("innerRingState") || "";
+            document.getElementById("innerRingAttribute").value = localStorage.getItem("innerRingAttribute") || "";
+            document.getElementById("innerRingLabel").value = localStorage.getItem("innerRingLabel") || "";
+            document.getElementById("outerRingState").value = localStorage.getItem("outerRingState") || "";
+            document.getElementById("outerRingAttribute").value = localStorage.getItem("outerRingAttribute") || "";
+            document.getElementById("outerRingLabel").value = localStorage.getItem("outerRingLabel") || "";
+            document.getElementById("farRingState").value = localStorage.getItem("farRingState") || "";
+            document.getElementById("farRingAttribute").value = localStorage.getItem("farRingAttribute") || "";
+            document.getElementById("farRingLabel").value = localStorage.getItem("farRingLabel") || "";
+            document.getElementById("weatherIconState").value = localStorage.getItem("weatherIconState") || "";
+            document.getElementById("weatherIconAttribute").value = localStorage.getItem("weatherIconAttribute") || "";
+            // if no attribute, then it's ok to take a direct state
+        }
+
+
+        
+        const chart = echarts.init(document.getElementById("multiRingGauge"));
+        let iconElement = document.getElementById("weatherIcon");
+
+        function getGradient(temp) {
+            return new echarts.graphic.LinearGradient(0, 0, 1, 0, [ // ✅ Left to Right
+                { offset: 0, color: "#36A2EB" },  // Blue at -20°C
+                { offset: 0.36, color: "#AAAAAA" }, // Gray at 0°C
+                { offset: 1, color: "#FF5733" }   // Red at 35°C
+            ]);
+        }
+
+        function getWeatherIcon(forecast) {
+            const icons = {
+            partlycloudy: "🌤️",
+            sunny: "☀️",
+            cloudy: "🌥️",
+            rainy: "🌧️",
+            snow: "❄️"
+            };
+            return icons[forecast] || "☀️"; // Default to sunny
+        }
+
+        let option = {
+            series: [
+                { 
+                    name: "Outer", 
+                    type: "gauge", 
+                    startAngle: 220, 
+                    endAngle: -40, 
+                    radius: "90%", 
+                    min: -20, 
+                    max: 35, 
+                    progress: { 
+                        show: true, 
+                        width: 8, 
+                        itemStyle: { color: getGradient(0) }
+                    },
+                    axisLine: { lineStyle: { width: 8, color: [[1, "#DDD"]] } }, 
+                    axisLabel: { show: false, distance: 5 }, 
+                    axisTick: { show: false }, 
+                    splitLine: { show: false }, 
+                    pointer: { show: false }, 
+                    detail: { formatter: "-- °C", fontSize: 12, offsetCenter: [0, "-20%"] }, 
+                    data: [{ value: -35 }] 
+                }, { 
+                    name: "Middle", 
+                    type: "gauge", 
+                    startAngle: 220, 
+                    endAngle: -40, 
+                    radius: "75%", 
+                    min: -20, 
+                    max: 35, 
+                    progress: { 
+                        show: true, 
+                        width: 8, 
+                        itemStyle: { color: getGradient(0) }
+                    },
+                    axisLine: { lineStyle: { width: 8, color: [[1, "#DDD"]] } }, 
+                    axisLabel: { show: false, distance: 5 }, 
+                    axisTick: { show: false }, 
+                    splitLine: { show: false }, 
+                    pointer: { show: false }, 
+                    detail: { formatter: "-- °C", fontSize: 12, offsetCenter: [0, "0%"] }, 
+                    data: [{ value: -35 }]
+                }, { 
+                    name: "Inner", 
+                    type: "gauge", 
+                    startAngle: 220, 
+                    endAngle: -40, 
+                    radius: "60%", 
+                    min: -20, 
+                    max: 35, 
+                    progress: { 
+                        show: true, 
+                        width: 8, 
+                        itemStyle: { color: getGradient(0) }
+                    },
+                    axisLine: { lineStyle: { width: 8, color: [[1, "#DDD"]] } }, 
+                    axisLabel: {
+                        show: true,
+                        distance: 5,
+                        fontSize: 10,
+                        formatter: function (value) {
+                            return (value % 5 === 0) ? value : "";
+                        }
+                    }, 
+                    axisTick: { show: false }, 
+                    splitLine: { show: false },
+                    splitNumber: 11, 
+                    pointer: { show: false }, 
+                    detail: { formatter: "-- °C", fontSize: 12, offsetCenter: [0, "30%"] }, 
+                    data: [{ value: -35 }]
+                }
+            ]
+        };
+
+        chart.setOption(option);
+
+        // Function to update ANY ring dynamically
+        function updateRingTemperature(ringIndex, newTemp, label) {
+            if (ringIndex < 0 || ringIndex > 2) return; // Prevent invalid index
+            option.series[ringIndex].data[0].value = newTemp; // Directly use temperature
+            option.series[ringIndex].progress.itemStyle.color = getGradient(newTemp);
+            option.series[ringIndex].detail.formatter = `${label}: ${newTemp} °C`;
+            chart.setOption(option, true); // Apply update
+        }
+
+        // Function to update the weather icon
+        function updateWeatherIcon(newForecast) {
+            iconElement.innerText = getWeatherIcon(newForecast);
         }
 
         async function fetchDisplayData() {
             const token = localStorage.getItem("token");
-            const getUrl = localStorage.getItem("getUrl");
-            if (!getUrl || !token) {
-                console.error("Get URL or token not set!");
+            const HAURL = localStorage.getItem("HAURL");
+            const innerRingState = localStorage.getItem("innerRingState");
+            const innerRingAttribute = localStorage.getItem("innerRingAttribute");
+            const innerRingLabel = localStorage.getItem("innerRingLabel");
+            const outerRingState = localStorage.getItem("outerRingState");
+            const outerRingAttribute = localStorage.getItem("outerRingAttribute");
+            const outerRingLabel = localStorage.getItem("outerRingLabel");
+            const farRingState = localStorage.getItem("farRingState");
+            const farRingAttribute = localStorage.getItem("farRingAttribute");
+            const farRingLabel = localStorage.getItem("farRingLabel");
+            const weatherIconState = localStorage.getItem("weatherIconState");
+            const weatherIconAttribute = localStorage.getItem("weatherIconAttribute");
+            if (!token || !HAURL || !innerRingState || !outerRingState || !farRingState || !weatherIconState) {
+                console.error("Settings not configured!");
                 return;
             }
+            let URL = `${HAURL}api/states/${innerRingState}`;
             try {
-                const response = await fetch(getUrl, {
+                const response = await fetch(URL, {
                     headers: { "Authorization": `Bearer ${token}`, "Content-Type": "application/json" },
                 });
 
                 if (!response.ok) throw new Error("Invalid response");
                 const data = await response.json();
-                document.getElementById("temperatureDisplay").innerText = `${data.attributes.current_temperature} °C`;
+                const value = innerRingAttribute ? data.attributes[innerRingAttribute] : data.state;
+                updateRingTemperature(2, value, innerRingLabel);
             } catch (error) {
                 console.error("Error fetching Home Assistant data:", error);
-                document.getElementById("temperatureDisplay").innerText = "Error!";
+                document.getElementById("officeTemp").innerText = "Error!";
+            }
+            URL = `${HAURL}api/states/${outerRingState}`;
+            try {
+                const response = await fetch(URL, {
+                    headers: { "Authorization": `Bearer ${token}`, "Content-Type": "application/json" },
+                });
+
+                if (!response.ok) throw new Error("Invalid response");
+                const data = await response.json();
+                const value = outerRingAttribute ? data.attributes[outerRingAttribute] : data.state;
+                updateRingTemperature(1, value, outerRingLabel);
+            } catch (error) {
+                console.error("Error fetching Home Assistant data:", error);
+                document.getElementById("livingRoomTemp").innerText = "Error!";
+            }
+            URL = `${HAURL}api/states/${farRingState}`;
+            try {
+                const response = await fetch(URL, {
+                    headers: { "Authorization": `Bearer ${token}`, "Content-Type": "application/json" },
+                });
+
+                if (!response.ok) throw new Error("Invalid response");
+                const data = await response.json();
+                const value = farRingAttribute ? data.attributes[farRingAttribute] : data.state;
+                updateRingTemperature(0, value, farRingLabel);
+            } catch (error) {
+                console.error("Error fetching Home Assistant data:", error);
+                document.getElementById("outdoorTemp").innerText = "Error!";
+            }
+            URL = `${HAURL}api/states/${weatherIconState}`;
+            try {
+                const response = await fetch(URL, {
+                    headers: { "Authorization": `Bearer ${token}`, "Content-Type": "application/json" },
+                });
+
+                if (!response.ok) throw new Error("Invalid response");
+                const data = await response.json();
+                const value = weatherIconAttribute ? data.attributes[weatherIconAttribute] : data.state;
+                updateWeatherIcon(value);
+            } catch (error) {
+                console.error("Error fetching Home Assistant data:", error);
+                document.getElementById("weatherIcon").innerText = "Error!";
             }
         }
 
@@ -126,20 +332,28 @@
             }
 
             const token = localStorage.getItem("token");
-            const getUrl = localStorage.getItem("getUrl");
+            const HAURL = localStorage.getItem("HAURL");
+            const innerRingState = localStorage.getItem("innerRingState");
+            const innerRingAttribute = localStorage.getItem("innerRingAttribute");
+            const innerRingLabel = localStorage.getItem("innerRingLabel");
+            const outerRingState = localStorage.getItem("outerRingState");
+            const outerRingAttribute = localStorage.getItem("outerRingAttribute");
+            const outerRingLabel = localStorage.getItem("outerRingLabel");
+            const farRingState = localStorage.getItem("farRingState");
+            const farRingAttribute = localStorage.getItem("farRingAttribute");
+            const farRingLabel = localStorage.getItem("farRingLabel");
+            const weatherIconState = localStorage.getItem("weatherIconState");
+            const weatherIconAttribute = localStorage.getItem("weatherIconAttribute");
             
-            if (!token || !getUrl) {
+            if (!token || !HAURL || !innerRingState || !outerRingState || !farRingState || !weatherIconState) {
                 console.error("Settings not configured!");
                 return;
             }
 
-            // Extract base URL and entity ID
-            const baseUrl = getUrl.split('/api/')[0];
-            const entityId = getUrl.split('states/')[1];
-            const wsUrl = baseUrl.replace(/^http/, 'ws');
+            const wsUrl = HAURL.replace(/^http/, 'ws');
             
             try {
-                ws = new WebSocket(`${wsUrl}/api/websocket`);
+                ws = new WebSocket(`${wsUrl}api/websocket`);
 
                 ws.onopen = () => {
                     console.log("WebSocket Connected");
@@ -163,9 +377,27 @@
                     }
                     else if (data.type === "event" && 
                              data.event.event_type === "state_changed" && 
-                             data.event.data.entity_id === entityId) {
-                        const temp = data.event.data.new_state.attributes.current_temperature;
-                        document.getElementById("temperatureDisplay").innerText = `${temp} °C`;
+                             data.event.data.entity_id === innerRingState) {
+                        const value = innerRingAttribute ? data.event.data.new_state.attributes[innerRingAttribute] : data.event.data.new_state.state;
+                        updateRingTemperature(0, value, innerRingLabel);
+                    }
+                    else if (data.type === "event" && 
+                             data.event.event_type === "state_changed" && 
+                             data.event.data.entity_id === outerRingState) {
+                        const value = outerRingAttribute ? data.event.data.new_state.attributes[outerRingAttribute] : data.event.data.new_state.state;
+                        updateRingTemperature(1, value, outerRingLabel);
+                    }
+                    else if (data.type === "event" && 
+                             data.event.event_type === "state_changed" && 
+                             data.event.data.entity_id === farRingState) {
+                        const value = farRingAttribute ? data.event.data.new_state.attributes[farRingAttribute] : data.event.data.new_state.state;
+                        updateRingTemperature(2, value, farRingLabel);
+                    }
+                    else if (data.type === "event" && 
+                             data.event.event_type === "state_changed" && 
+                             data.event.data.entity_id === weatherIconState) {
+                        const value = weatherIconAttribute ? data.event.data.new_state.attributes[weatherIconAttribute] : data.event.data.new_state.state;
+                        updateWeatherIcon(value);
                     }
                 };
 
