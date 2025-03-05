@@ -176,7 +176,7 @@
                     axisTick: { show: false }, 
                     splitLine: { show: false }, 
                     pointer: { show: false }, 
-                    detail: { formatter: "-- °C", fontSize: 12, offsetCenter: [0, "-20%"] }, 
+                    detail: { formatter: "-- °C", fontSize: 24, color: "white", offsetCenter: [0, "-20%"] }, 
                     data: [{ value: -35 }] 
                 }, { 
                     name: "Middle", 
@@ -196,7 +196,7 @@
                     axisTick: { show: false }, 
                     splitLine: { show: false }, 
                     pointer: { show: false }, 
-                    detail: { formatter: "-- °C", fontSize: 12, offsetCenter: [0, "0%"] }, 
+                    detail: { formatter: "-- °C", fontSize: 24, color: "white", offsetCenter: [0, "0%"] }, 
                     data: [{ value: -35 }]
                 }, { 
                     name: "Inner", 
@@ -215,7 +215,8 @@
                     axisLabel: {
                         show: true,
                         distance: 5,
-                        fontSize: 10,
+                        fontSize: 18,
+                        color: "white",
                         formatter: function (value) {
                             return (value % 5 === 0) ? value : "";
                         }
@@ -224,7 +225,7 @@
                     splitLine: { show: false },
                     splitNumber: 11, 
                     pointer: { show: false }, 
-                    detail: { formatter: "-- °C", fontSize: 12, offsetCenter: [0, "30%"] }, 
+                    detail: { formatter: "-- °C", fontSize: 24, color: "white", offsetCenter: [0, "30%"] }, 
                     data: [{ value: -35 }]
                 }
             ]
