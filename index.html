@@ -2,8 +2,8 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=640, height=640, initial-scale=1.0">
-    <title>Kraken Display</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Kraken Home Assistant</title>
     <link href="https://cdn.jsdelivr.net/npm/daisyui@5" rel="stylesheet" type="text/css" />
     <script src="https://cdn.jsdelivr.net/npm/@tailwindcss/browser@4"></script>
     <script src="https://cdn.jsdelivr.net/npm/echarts"></script>
@@ -12,13 +12,18 @@
             display: flex;
             justify-content: center;
             align-items: center;
-            width: 640px;
-            height: 640px;
+            width: 100vw;
+            height: 100vh;
             margin: 0;
             background-color: black;
             font-family: Arial, sans-serif;
             text-align: center;
-            flex-direction: column;
+        }
+        .resultPanel {
+            width: 640px;
+            height: 640px;
+            position: relative;
+            flex-shrink: 0;
         }
         .loading-circle {
             display: block;
@@ -27,14 +32,14 @@
     </style>
 </head>
 <body>
-    <div style="width: 640px; height: 640px; position: relative;">
-        <div id="weatherIcon" style="font-size: 6rem; position: absolute; top: 75%; left: 50%; transform: translate(-50%, -50%); z-index: 10;">
+    <div class="resultPanel">
+        <div id="weatherIcon" style="font-size: 8rem; position: absolute; top: 80%; left: 50%; transform: translate(-50%, -50%); z-index: 10;">
           ☀️
         </div>
         <div id="multiRingGauge" style="width: 100%; height: 100%;"></div>
     </div>
 
-    <fieldset class="settings fieldset w-xs" id="settingsPanel">
+    <fieldset class="settings fieldset w-xs" id="settingsPanel" style="overflow-y: auto;">
         <legend class="fieldset-legend text-white">Configuration</legend>
         <label class="fieldset-label text-white">Bearer Token</label>
         <input type="password" class="input" id="token" placeholder="Your Bearer Token">
@@ -76,250 +81,252 @@
         let reconnectTimeout = null;
         let messageId = 1;
 
-        function saveSettings() {
-            const token = document.getElementById("token").value.trim();
-            const HAURL = document.getElementById("HAURL").value.trim();
-            const innerRingState = document.getElementById("innerRingState").value.trim();
-            const innerRingAttribute = document.getElementById("innerRingAttribute").value.trim();
-            const innerRingLabel = document.getElementById("innerRingLabel").value.trim();
-            const outerRingState = document.getElementById("outerRingState").value.trim();
-            const outerRingAttribute = document.getElementById("outerRingAttribute").value.trim();
-            const outerRingLabel = document.getElementById("outerRingLabel").value.trim();
-            const farRingState = document.getElementById("farRingState").value.trim();
-            const farRingAttribute = document.getElementById("farRingAttribute").value.trim();
-            const farRingLabel = document.getElementById("farRingLabel").value.trim();
-            const weatherIconState = document.getElementById("weatherIconState").value.trim();
-            const weatherIconAttribute = document.getElementById("weatherIconAttribute").value.trim();
+        const settingsKeys = [
+            "token",
+            "HAURL",
+            "innerRingState",
+            "innerRingAttribute",
+            "innerRingLabel",
+            "outerRingState",
+            "outerRingAttribute",
+            "outerRingLabel",
+            "farRingState",
+            "farRingAttribute",
+            "farRingLabel",
+            "weatherIconState",
+            "weatherIconAttribute",
+        ];
 
-            if (!token || !HAURL || !innerRingState || !outerRingState || !farRingState || !weatherIconState) {
-                alert("Please fill in all fields if possible (attributes can be empty, but then it takes the default)!");
-                return;
+        function saveSettings() {
+            for (const key of settingsKeys) {
+                const element = document.getElementById(key);
+                if (element) {
+                    localStorage.setItem(key, element.value.trim());
+                }
             }
 
-            localStorage.setItem("token", token);
-            localStorage.setItem("HAURL", HAURL);
-            localStorage.setItem("innerRingState", innerRingState);
-            localStorage.setItem("innerRingAttribute", innerRingAttribute);
-            localStorage.setItem("innerRingLabel", innerRingLabel);
-            localStorage.setItem("outerRingState", outerRingState);
-            localStorage.setItem("outerRingAttribute", outerRingAttribute);
-            localStorage.setItem("outerRingLabel", outerRingLabel);
-            localStorage.setItem("farRingState", farRingState);
-            localStorage.setItem("farRingAttribute", farRingAttribute);
-            localStorage.setItem("farRingLabel", farRingLabel);
-            localStorage.setItem("weatherIconState", weatherIconState);
-            localStorage.setItem("weatherIconAttribute", weatherIconAttribute);
-
             alert("Settings saved!");
-            setupWebSocket(); // Start WebSocket connection after saving
-            fetchDisplayData(); // Get initial state
+            setupWebSocket();
+            fetchDisplayData();
         }
 
         function loadSettings() {
-            document.getElementById("token").value = localStorage.getItem("token") || "";
-            document.getElementById("HAURL").value = localStorage.getItem("HAURL") || "";
-            document.getElementById("innerRingState").value = localStorage.getItem("innerRingState") || "";
-            document.getElementById("innerRingAttribute").value = localStorage.getItem("innerRingAttribute") || "";
-            document.getElementById("innerRingLabel").value = localStorage.getItem("innerRingLabel") || "";
-            document.getElementById("outerRingState").value = localStorage.getItem("outerRingState") || "";
-            document.getElementById("outerRingAttribute").value = localStorage.getItem("outerRingAttribute") || "";
-            document.getElementById("outerRingLabel").value = localStorage.getItem("outerRingLabel") || "";
-            document.getElementById("farRingState").value = localStorage.getItem("farRingState") || "";
-            document.getElementById("farRingAttribute").value = localStorage.getItem("farRingAttribute") || "";
-            document.getElementById("farRingLabel").value = localStorage.getItem("farRingLabel") || "";
-            document.getElementById("weatherIconState").value = localStorage.getItem("weatherIconState") || "";
-            document.getElementById("weatherIconAttribute").value = localStorage.getItem("weatherIconAttribute") || "";
-            // if no attribute, then it's ok to take a direct state
+            for (const key of settingsKeys) {
+                const element = document.getElementById(key);
+                if (element) {
+                    element.value = localStorage.getItem(key) || "";
+                }
+            }
         }
 
 
-        
+
         const chart = echarts.init(document.getElementById("multiRingGauge"));
         let iconElement = document.getElementById("weatherIcon");
 
-        function getGradient(temp) {
-            return new echarts.graphic.LinearGradient(0, 0, 1, 0, [ // ✅ Left to Right
-                { offset: 0, color: "#36A2EB" },  // Blue at -20°C
-                { offset: 0.36, color: "#AAAAAA" }, // Gray at 0°C
-                { offset: 1, color: "#FF5733" }   // Red at 35°C
+        function getGradient() {
+            return new echarts.graphic.LinearGradient(0, 0, 1, 0, [
+                { offset: 0, color: "#0057D9" },
+                { offset: 0.36, color: "#CCCCCC" },
+                { offset: 1, color: "#FF4500" }
             ]);
         }
 
         function getWeatherIcon(forecast) {
             const icons = {
-            partlycloudy: "🌤️",
-            sunny: "☀️",
-            cloudy: "🌥️",
-            rainy: "🌧️",
-            snow: "❄️"
+                partlycloudy: "🌤️",
+                sunny: "☀️",
+                cloudy: "🌥️",
+                rainy: "🌧️",
+                snow: "❄️"
             };
-            return icons[forecast] || "☀️"; // Default to sunny
+            return icons[forecast] || "☀️";
         }
-
+        let BACKGROUND_LINE_WIDTH = 6;
+        let LINE_WIDTH = 18;
+        let COLOR_FAR = "#ccc";
+        let COLOR_MID = "#999";
+        let COLOR_NEAR = "#666";
+        let MIN = -20;
+        let MAX = 35;
         let option = {
             series: [
-                { 
-                    name: "Outer", 
-                    type: "gauge", 
-                    startAngle: 220, 
-                    endAngle: -40, 
-                    radius: "90%", 
-                    min: -20, 
-                    max: 35, 
-                    progress: { 
-                        show: true, 
-                        width: 8, 
-                        itemStyle: { color: getGradient(0) }
+                {
+                    name: "Outer Background",
+                    type: "gauge",
+                    startAngle: 220,
+                    endAngle: -40,
+                    radius: "85%",
+                    min: MIN,
+                    max: MAX,
+                    progress: {
+                        show: false,
+                        width: BACKGROUND_LINE_WIDTH,
+                        itemStyle: { color: getGradient() }
                     },
-                    axisLine: { lineStyle: { width: 8, color: [[1, "#DDD"]] } }, 
-                    axisLabel: { show: false, distance: 5 }, 
-                    axisTick: { show: false }, 
-                    splitLine: { show: false }, 
-                    pointer: { show: false }, 
-                    detail: { formatter: "-- °C", fontSize: 24, color: "white", offsetCenter: [0, "-20%"] }, 
-                    data: [{ value: -35 }] 
-                }, { 
-                    name: "Middle", 
-                    type: "gauge", 
-                    startAngle: 220, 
-                    endAngle: -40, 
-                    radius: "75%", 
-                    min: -20, 
-                    max: 35, 
-                    progress: { 
-                        show: true, 
-                        width: 8, 
-                        itemStyle: { color: getGradient(0) }
+                    axisLine: { lineStyle: { width: BACKGROUND_LINE_WIDTH, color: [[1, getGradient()]] } },
+                    pointer: { show: false },
+                    axisTick: { show: false },
+                    splitLine: { show: false },
+                    axisLabel: { show: false },
+                    detail: { show: false },
+                    data: [{ value: MAX }]
+                }, {
+                    name: "Outer Foreground",
+                    type: "gauge",
+                    startAngle: 220,
+                    endAngle: -40,
+                    radius: "90%",
+                    min: MIN,
+                    max: MAX,
+                    progress: {
+                        show: true,
+                        width: LINE_WIDTH,
+                        itemStyle: { color: COLOR_FAR }
                     },
-                    axisLine: { lineStyle: { width: 8, color: [[1, "#DDD"]] } }, 
-                    axisLabel: { show: false, distance: 5 }, 
-                    axisTick: { show: false }, 
-                    splitLine: { show: false }, 
-                    pointer: { show: false }, 
-                    detail: { formatter: "-- °C", fontSize: 24, color: "white", offsetCenter: [0, "0%"] }, 
-                    data: [{ value: -35 }]
-                }, { 
-                    name: "Inner", 
-                    type: "gauge", 
-                    startAngle: 220, 
-                    endAngle: -40, 
-                    radius: "60%", 
-                    min: -20, 
-                    max: 35, 
-                    progress: { 
-                        show: true, 
-                        width: 8, 
-                        itemStyle: { color: getGradient(0) }
+                    axisLine: { show: false, lineStyle: { width: LINE_WIDTH, color: [[1, COLOR_FAR]] } },
+                    axisLabel: { show: false },
+                    axisTick: { show: false },
+                    splitLine: { show: false },
+                    pointer: { show: false },
+                    detail: { formatter: "-- °C", fontSize: 24, color: COLOR_FAR, offsetCenter: [0, "-25%"] },
+                    data: [{ value: MIN }]
+                }, {
+                    name: "Middle Background",
+                    type: "gauge",
+                    startAngle: 220,
+                    endAngle: -40,
+                    radius: "75%",
+                    min: MIN,
+                    max: MAX,
+                    progress: {
+                        show: false,
+                        width: BACKGROUND_LINE_WIDTH,
+                        itemStyle: { color: getGradient() }
                     },
-                    axisLine: { lineStyle: { width: 8, color: [[1, "#DDD"]] } }, 
+                    axisLine: { lineStyle: { width: BACKGROUND_LINE_WIDTH, color: [[1, getGradient()]] } },
+                    pointer: { show: false },
+                    axisTick: { show: false },
+                    splitLine: { show: false },
+                    axisLabel: { show: false },
+                    detail: { show: false },
+                    data: [{ value: MAX }]
+                }, {
+                    name: "Middle Foreground",
+                    type: "gauge",
+                    startAngle: 220,
+                    endAngle: -40,
+                    radius: "80%",
+                    min: MIN,
+                    max: MAX,
+                    progress: {
+                        show: true,
+                        width: LINE_WIDTH,
+                        itemStyle: { color: COLOR_MID }
+                    },
+                    axisLine: { show: false, lineStyle: { width: LINE_WIDTH, color: [[1, COLOR_MID]] } },
+                    axisLabel: { show: false },
+                    axisTick: { show: false },
+                    splitLine: { show: false },
+                    pointer: { show: false },
+                    detail: { formatter: "-- °C", fontSize: 24, color: COLOR_MID, offsetCenter: [0, "-5%"] },
+                    data: [{ value: MIN }]
+                }, {
+                    name: "Inner Background",
+                    type: "gauge",
+                    startAngle: 220,
+                    endAngle: -40,
+                    radius: "65%",
+                    min: MIN,
+                    max: MAX,
+                    progress: {
+                        show: false,
+                        width: BACKGROUND_LINE_WIDTH,
+                        itemStyle: { color: getGradient() }
+                    },
+                    axisLine: { lineStyle: { width: BACKGROUND_LINE_WIDTH, color: [[1, getGradient()]] } },
+                    pointer: { show: false },
+                    axisTick: { show: false },
+                    splitLine: { show: false },
+                    splitNumber: 11,
                     axisLabel: {
                         show: true,
-                        distance: 5,
+                        distance: 0,
                         fontSize: 18,
                         color: "white",
                         formatter: function (value) {
                             return (value % 5 === 0) ? value : "";
                         }
-                    }, 
-                    axisTick: { show: false }, 
+                    },
+                    detail: { show: false },
+                    data: [{ value: MAX }]
+                }, {
+                    name: "Inner Foreground",
+                    type: "gauge",
+                    startAngle: 220,
+                    endAngle: -40,
+                    radius: "70%",
+                    min: MIN,
+                    max: MAX,
+                    progress: {
+                        show: true,
+                        width: LINE_WIDTH,
+                        itemStyle: { color: COLOR_NEAR }
+                    },
+                    axisLine: { show: false, lineStyle: { width: LINE_WIDTH, color: [[1, COLOR_NEAR]] } },
+                    pointer: { show: false },
+                    axisTick: { show: false },
                     splitLine: { show: false },
-                    splitNumber: 11, 
-                    pointer: { show: false }, 
-                    detail: { formatter: "-- °C", fontSize: 24, color: "white", offsetCenter: [0, "30%"] }, 
-                    data: [{ value: -35 }]
+                    axisLabel: { show: false },
+                    detail: { formatter: "-- °C", fontSize: 24, color: COLOR_NEAR, offsetCenter: [0, "20%"] },
+                    data: [{ value: MIN }]
                 }
             ]
         };
 
         chart.setOption(option);
 
-        // Function to update ANY ring dynamically
         function updateRingTemperature(ringIndex, newTemp, label) {
-            if (ringIndex < 0 || ringIndex > 2) return; // Prevent invalid index
-            option.series[ringIndex].data[0].value = newTemp; // Directly use temperature
-            option.series[ringIndex].progress.itemStyle.color = getGradient(newTemp);
+            if (ringIndex < 0 || ringIndex >= option.series.length) return;
+            option.series[ringIndex].data[0].value = newTemp;
             option.series[ringIndex].detail.formatter = `${label}: ${newTemp} °C`;
-            chart.setOption(option, true); // Apply update
+            chart.setOption(option, true);
         }
 
-        // Function to update the weather icon
         function updateWeatherIcon(newForecast) {
             iconElement.innerText = getWeatherIcon(newForecast);
         }
 
-        async function fetchDisplayData() {
+        async function fetchEntityValue(stateId, attribute) {
             const token = localStorage.getItem("token");
             const HAURL = localStorage.getItem("HAURL");
-            const innerRingState = localStorage.getItem("innerRingState");
-            const innerRingAttribute = localStorage.getItem("innerRingAttribute");
-            const innerRingLabel = localStorage.getItem("innerRingLabel");
-            const outerRingState = localStorage.getItem("outerRingState");
-            const outerRingAttribute = localStorage.getItem("outerRingAttribute");
-            const outerRingLabel = localStorage.getItem("outerRingLabel");
-            const farRingState = localStorage.getItem("farRingState");
-            const farRingAttribute = localStorage.getItem("farRingAttribute");
-            const farRingLabel = localStorage.getItem("farRingLabel");
-            const weatherIconState = localStorage.getItem("weatherIconState");
-            const weatherIconAttribute = localStorage.getItem("weatherIconAttribute");
-            if (!token || !HAURL || !innerRingState || !outerRingState || !farRingState || !weatherIconState) {
-                console.error("Settings not configured!");
-                return;
-            }
-            let URL = `${HAURL}api/states/${innerRingState}`;
-            try {
-                const response = await fetch(URL, {
-                    headers: { "Authorization": `Bearer ${token}`, "Content-Type": "application/json" },
-                });
+            const url = `${HAURL}api/states/${stateId}`;
 
-                if (!response.ok) throw new Error("Invalid response");
-                const data = await response.json();
-                const value = innerRingAttribute ? data.attributes[innerRingAttribute] : data.state;
-                updateRingTemperature(2, value, innerRingLabel);
+            const response = await fetch(url, {
+                headers: { "Authorization": `Bearer ${token}`, "Content-Type": "application/json" }
+            });
+
+            if (!response.ok) throw new Error(`Failed to fetch ${stateId}`);
+            const data = await response.json();
+            return attribute ? data.attributes[attribute] : data.state;
+        }
+
+        async function fetchDisplayData() {
+            try {
+                const innerValue = await fetchEntityValue(localStorage.getItem("innerRingState"), localStorage.getItem("innerRingAttribute"));
+                updateRingTemperature(5, innerValue, localStorage.getItem("innerRingLabel"));
+
+                const outerValue = await fetchEntityValue(localStorage.getItem("outerRingState"), localStorage.getItem("outerRingAttribute"));
+                updateRingTemperature(3, outerValue, localStorage.getItem("outerRingLabel"));
+
+                const farValue = await fetchEntityValue(localStorage.getItem("farRingState"), localStorage.getItem("farRingAttribute"));
+                updateRingTemperature(1, farValue, localStorage.getItem("farRingLabel"));
+
+                const weatherValue = await fetchEntityValue(localStorage.getItem("weatherIconState"), localStorage.getItem("weatherIconAttribute"));
+                updateWeatherIcon(weatherValue);
+
             } catch (error) {
                 console.error("Error fetching Home Assistant data:", error);
-                document.getElementById("officeTemp").innerText = "Error!";
-            }
-            URL = `${HAURL}api/states/${outerRingState}`;
-            try {
-                const response = await fetch(URL, {
-                    headers: { "Authorization": `Bearer ${token}`, "Content-Type": "application/json" },
-                });
-
-                if (!response.ok) throw new Error("Invalid response");
-                const data = await response.json();
-                const value = outerRingAttribute ? data.attributes[outerRingAttribute] : data.state;
-                updateRingTemperature(1, value, outerRingLabel);
-            } catch (error) {
-                console.error("Error fetching Home Assistant data:", error);
-                document.getElementById("livingRoomTemp").innerText = "Error!";
-            }
-            URL = `${HAURL}api/states/${farRingState}`;
-            try {
-                const response = await fetch(URL, {
-                    headers: { "Authorization": `Bearer ${token}`, "Content-Type": "application/json" },
-                });
-
-                if (!response.ok) throw new Error("Invalid response");
-                const data = await response.json();
-                const value = farRingAttribute ? data.attributes[farRingAttribute] : data.state;
-                updateRingTemperature(0, value, farRingLabel);
-            } catch (error) {
-                console.error("Error fetching Home Assistant data:", error);
-                document.getElementById("outdoorTemp").innerText = "Error!";
-            }
-            URL = `${HAURL}api/states/${weatherIconState}`;
-            try {
-                const response = await fetch(URL, {
-                    headers: { "Authorization": `Bearer ${token}`, "Content-Type": "application/json" },
-                });
-
-                if (!response.ok) throw new Error("Invalid response");
-                const data = await response.json();
-                const value = weatherIconAttribute ? data.attributes[weatherIconAttribute] : data.state;
-                updateWeatherIcon(value);
-            } catch (error) {
-                console.error("Error fetching Home Assistant data:", error);
-                document.getElementById("weatherIcon").innerText = "Error!";
             }
         }
 
@@ -334,25 +341,13 @@
 
             const token = localStorage.getItem("token");
             const HAURL = localStorage.getItem("HAURL");
-            const innerRingState = localStorage.getItem("innerRingState");
-            const innerRingAttribute = localStorage.getItem("innerRingAttribute");
-            const innerRingLabel = localStorage.getItem("innerRingLabel");
-            const outerRingState = localStorage.getItem("outerRingState");
-            const outerRingAttribute = localStorage.getItem("outerRingAttribute");
-            const outerRingLabel = localStorage.getItem("outerRingLabel");
-            const farRingState = localStorage.getItem("farRingState");
-            const farRingAttribute = localStorage.getItem("farRingAttribute");
-            const farRingLabel = localStorage.getItem("farRingLabel");
-            const weatherIconState = localStorage.getItem("weatherIconState");
-            const weatherIconAttribute = localStorage.getItem("weatherIconAttribute");
-            
-            if (!token || !HAURL || !innerRingState || !outerRingState || !farRingState || !weatherIconState) {
-                console.error("Settings not configured!");
-                return;
-            }
-
             const wsUrl = HAURL.replace(/^http/, 'ws');
-            
+
+            const innerRingAttribute = localStorage.getItem("innerRingAttribute");
+            const outerRingAttribute = localStorage.getItem("outerRingAttribute");
+            const farRingAttribute = localStorage.getItem("farRingAttribute");
+            const weatherIconAttribute = localStorage.getItem("weatherIconAttribute");
+
             try {
                 ws = new WebSocket(`${wsUrl}api/websocket`);
 
@@ -367,7 +362,7 @@
 
                 ws.onmessage = (event) => {
                     const data = JSON.parse(event.data);
-                    
+
                     if (data.type === "auth_ok") {
                         // Auth phase 2: Subscribe to events
                         ws.send(JSON.stringify({
@@ -376,27 +371,19 @@
                             event_type: "state_changed"
                         }));
                     }
-                    else if (data.type === "event" && 
-                             data.event.event_type === "state_changed" && 
-                             data.event.data.entity_id === innerRingState) {
+                    else if (data.type === "event" && data.event.event_type === "state_changed" && data.event.data.entity_id === localStorage.getItem("innerRingState")) {
                         const value = innerRingAttribute ? data.event.data.new_state.attributes[innerRingAttribute] : data.event.data.new_state.state;
-                        updateRingTemperature(0, value, innerRingLabel);
+                        updateRingTemperature(5, value, localStorage.getItem("innerRingLabel"));
                     }
-                    else if (data.type === "event" && 
-                             data.event.event_type === "state_changed" && 
-                             data.event.data.entity_id === outerRingState) {
+                    else if (data.type === "event" && data.event.event_type === "state_changed" && data.event.data.entity_id === localStorage.getItem("outerRingState")) {
                         const value = outerRingAttribute ? data.event.data.new_state.attributes[outerRingAttribute] : data.event.data.new_state.state;
-                        updateRingTemperature(1, value, outerRingLabel);
+                        updateRingTemperature(3, value, localStorage.getItem("outerRingLabel"));
                     }
-                    else if (data.type === "event" && 
-                             data.event.event_type === "state_changed" && 
-                             data.event.data.entity_id === farRingState) {
+                    else if (data.type === "event" && data.event.event_type === "state_changed" && data.event.data.entity_id === localStorage.getItem("farRingState")) {
                         const value = farRingAttribute ? data.event.data.new_state.attributes[farRingAttribute] : data.event.data.new_state.state;
-                        updateRingTemperature(2, value, farRingLabel);
+                        updateRingTemperature(1, value, localStorage.getItem("farRingLabel"));
                     }
-                    else if (data.type === "event" && 
-                             data.event.event_type === "state_changed" && 
-                             data.event.data.entity_id === weatherIconState) {
+                    else if (data.type === "event" && data.event.event_type === "state_changed" && data.event.data.entity_id === localStorage.getItem("weatherIconState")) {
                         const value = weatherIconAttribute ? data.event.data.new_state.attributes[weatherIconAttribute] : data.event.data.new_state.state;
                         updateWeatherIcon(value);
                     }
@@ -416,14 +403,12 @@
                 reconnectTimeout = setTimeout(setupWebSocket, 5000);
             }
         }
-        
-        // Load saved settings on page load
+
         loadSettings();
 
-        // Initial setup
         setTimeout(() => {
-            fetchDisplayData();  // Get initial state
-            setupWebSocket();    // Start WebSocket connection
+            fetchDisplayData();
+            setupWebSocket();
         }, 2000);
     </script>
 </body>
