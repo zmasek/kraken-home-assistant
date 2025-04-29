@@ -1,5 +1,7 @@
 # Kraken Home Assistant Display
 
+![Kraken Display Screenshot](kraken-display.png)
+
 A simple, single-file HTML app to display Home Assistant sensor data on a NZXT Kraken AIO LCD screen (640x640px).
 
 This project uses:
