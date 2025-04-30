@@ -41,11 +41,37 @@
             display: block;
             margin: auto;
         }
+        #alertOverlay {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background-color: black;
+            opacity: 1;
+            display: none;
+            justify-content: center;
+            align-items: center;
+            flex-direction: column;
+            z-index: 100;
+        }
+        #alertText {
+            font-size: 2rem;
+            color: white;
+            text-shadow: 2px 2px 0 black, -2px -2px 0 black;
+            padding: 1rem;
+            text-align: center;
+        }
     </style>
 </head>
 <body>
     <div class="resultPanel">
         <div id="weatherIcon">☀️</div>
+        <div id="alertOverlay">
+            <div id="alertText">
+                Alert!
+            </div>
+        </div>
         <div id="multiRingGauge"></div>
     </div>
 
@@ -309,6 +335,28 @@
             iconElement.innerText = getWeatherIcon(newForecast);
         }
 
+        // Parse event
+        function triggerKrakenAlert(text, color) {
+            const overlay = document.getElementById("alertOverlay");
+            const alertText = document.getElementById("alertText");
+
+            overlay.style.display = "flex";
+            alertText.innerText = text;
+
+            let flash = true;
+            let flashes = 0;
+
+            const interval = setInterval(() => {
+                overlay.style.backgroundColor = flash ? color : "black";
+                flash = !flash;
+                flashes++;
+                if (flashes >= 6) { // 3 seconds = 6 flashes (500ms each)
+                    clearInterval(interval);
+                    overlay.style.display = "none";
+                }
+            }, 500);
+        }
+
         // Fetch values
         async function fetchEntityValue(stateId, attribute) {
             const token = localStorage.getItem("token");
@@ -385,6 +433,12 @@
                             type: "subscribe_events",
                             event_type: "state_changed"
                         }));
+                        // To get the events from the kraken notification
+                        ws.send(JSON.stringify({
+                            id: messageId++,
+                            type: "subscribe_events",
+                            event_type: "kraken_notification"
+                        }));
                     }
                     else if (data.type === "event" && data.event.event_type === "state_changed") {
                         if (data.event.data.entity_id === localStorage.getItem("innerRingState")) {
@@ -403,6 +457,12 @@
                             const value = weatherIconAttribute ? data.event.data.new_state.attributes[weatherIconAttribute] : data.event.data.new_state.state;
                             updateWeatherIcon(value);
                         }
+                    }
+                    else if (data.type === "event" && data.event.event_type === "kraken_notification") {
+                        console.log("event received", data.event.data.text)
+                        const text = data.event.data.text;
+                        const color = data.event.data.color;
+                        triggerKrakenAlert(text, color);
                     }
                 };
 
