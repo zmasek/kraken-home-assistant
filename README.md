@@ -84,6 +84,57 @@ Each ring shows:
 
 ---
 
+## 🔔 Custom Notifications via `kraken_notification` Events
+
+Kraken Display supports visual alerts triggered by Home Assistant events using a custom `kraken_notification` event. You can send these events to temporarily overlay the gauges with a message and background flash.
+
+### How to Trigger
+
+Create a script in Home Assistant:
+
+```yaml
+alias: Kraken Notify
+fields:
+  color:
+    description: A hex color code with hash
+  text:
+    description: A string of notifying text
+sequence:
+  - event: kraken_notification
+    event_data:
+      text: "{{ text }}"
+      color: "{{ color }}"
+description: ""
+```
+
+Then where needed, call that script. For example, as an automation action:
+
+```yaml
+- action: script.kraken_notify
+  metadata: {}
+  data:
+    color: "#FF0000"
+    text: Kettle Finished!
+```
+
+- `text`: The message shown in large text overlay
+- `color`: The background color used for the 3-second flash (any valid CSS color)
+
+### Behavior
+
+When triggered, the Kraken display will:
+1. Overlay the screen with a black background
+2. Show the message in outlined white text
+3. Flash the background color for 3 seconds
+4. Return to the regular gauge display
+
+This feature is ideal for short, high-visibility alerts like:
+- Doorbell rings
+- Preheat finished
+- Motion detected
+
+---
+
 ## 📜 License
 This project is released under the [MIT License](https://opensource.org/licenses/MIT).
 
